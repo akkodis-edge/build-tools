@@ -1,0 +1,18 @@
+FROM debian:10.5
+RUN apt update && \
+	apt install -y gawk wget git-core diffstat unzip texinfo gcc-multilib \
+		build-essential chrpath socat libsdl1.2-dev xterm cpio locales
+ARG USERNAME=user
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} ${USERNAME} && \
+	useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} && \
+	chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
+	sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+	locale-gen && \
+	update-locale LC_ALL=en_US.UTF-8
+
+ENV LANG en_US.UTF-8
+ENV LC_ALL en_US.UTF-8
+WORKDIR /home/${USERNAME}
+USER $USERNAME
