@@ -9,7 +9,8 @@ set -e
 source_dir=""
 sstate_dir=""
 downloads_dir=""
-while getopts "h?s:c:d:" opt; do
+pass_ssh=false
+while getopts "h?s:c:d:k" opt; do
     case "$opt" in
     h|\?)
         echo "Usage: $(basename $0) [OPTIONS]"
@@ -27,6 +28,8 @@ while getopts "h?s:c:d:" opt; do
         ;;
     s)	sstate_dir="$(realpath $OPTARG)"
         ;;
+    k)  pass_ssh=true
+        ;;
     esac
 done
 
@@ -39,6 +42,10 @@ if [ ! -z ${sstate_dir} ]; then
 fi
 if [ ! -z ${downloads_dir} ]; then
 	cmd="$cmd -v $downloads_dir:$downloads_dir"
+fi
+if ${pass_ssh}; then
+    ssh_dir="/home/$(id -un)/.ssh"
+	cmd="$cmd -v $ssh_dir:$ssh_dir"
 fi
 cmd="$cmd oe:$(id -un)" # add name:tag of image
 echo "Running command:"
