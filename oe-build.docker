@@ -16,4 +16,4 @@ ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 WORKDIR /home/${USERNAME}
 USER $USERNAME
-ENTRYPOINT ["/bin/bash"]
+CMD ["/bin/bash"]
