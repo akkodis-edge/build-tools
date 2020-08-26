@@ -6,6 +6,6 @@
 
 set -e
 USER="$(id -un)"
-docker build -t oe:${USER} --build-arg "USERNAME=${USER}" --build-arg "UID=$(id -u)" --build-arg "GID=$(id -g)" - < oe-build.docker
+docker build -t oe:${USER} --build-arg "USERNAME=${USER}" --build-arg "UID=$(id -u)" --build-arg "GID=$(id -g)" - < "$(dirname $0)"/oe-build.docker
 echo 
 echo "Finished image build: oe:${USER}"
