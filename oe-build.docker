@@ -7,16 +7,13 @@ ARG USERNAME=user
 ARG UID=1000
 ARG GID=1000
 RUN groupadd -g ${GID} ${USERNAME} && \
-	useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} && \
+	useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} -s /bin/bash && \
 	chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
 	sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
 	locale-gen && \
-	update-locale LC_ALL=en_US.UTF-8 && \
-	rm /bin/sh && \
-	ln -s bash /bin/sh
+	update-locale LC_ALL=en_US.UTF-8
 
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 WORKDIR /home/${USERNAME}
 USER $USERNAME
-CMD ["/bin/bash"]
