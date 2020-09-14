@@ -1,7 +1,8 @@
 FROM debian:10.5
 RUN apt update && \
 	apt install -y gawk wget git-core diffstat unzip texinfo gcc-multilib \
-		build-essential chrpath socat libsdl1.2-dev xterm cpio locales
+		build-essential chrpath socat libsdl1.2-dev xterm cpio locales \
+		screen libncurses-dev
 ARG USERNAME=user
 ARG UID=1000
 ARG GID=1000
