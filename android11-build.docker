@@ -1,0 +1,43 @@
+FROM debian:10.11
+
+ARG clang_url=https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
+ARG clang_branch=master
+ARG clang_commit=007c96f100c5322acc37b84669c032c0121e68d0
+ARG gcc_arm_url=http://sources.buildroot.net/toolchain-external-arm-aarch64/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
+ARG repo_url=https://storage.googleapis.com/git-repo-downloads/repo
+
+# Required by AOSP
+ENV CLANG_PATH=/opt/prebuilt-android-clang
+ENV AARCH64_GCC_CROSS_COMPILE=/opt/gcc-aarch64/bin/aarch64-linux-gnu-
+ENV CCACHE_EXEC=/usr/bin/ccache
+
+# Add packages for building Android
+RUN apt update && \
+	apt install -y zlib1g-dev liblz-dev liblzo2-2 liblzo2-dev lzop git curl \
+    mtd-utils android-sdk-libsparse-utils android-sdk-ext4-utils \
+    device-tree-compiler gdisk m4 bison flex make \
+    cpio curl procps coreutils moreutils device-tree-compiler libssl-dev \
+    bc rsync libncurses5 ccache unzip python3 zip sudo wget \
+    git-core gnupg build-essential gcc-multilib g++-multilib libc6-dev-i386 \
+    lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev \
+    libxml2-utils xsltproc fontconfig \
+    && curl ${repo_url} > /usr/bin/repo && chmod 0755 /usr/bin/repo \
+    && sed -i 's:#!/usr/bin/env python:#!/usr/bin/env python3:g' /usr/bin/repo \
+    && mkdir -p /opt \
+    && git clone -b ${clang_branch} --single-branch ${clang_url} ${CLANG_PATH} \
+    && cd ${CLANG_PATH} && git checkout ${clang_commit} && rm -rf .git/ \
+    && wget ${gcc_arm_url} -O /opt/gcc_arm.tar \
+    && mkdir -p /opt/gcc-aarch64 \
+    && tar -xf /opt/gcc_arm.tar -C /opt/gcc-aarch64/ && rm /opt/gcc_arm.tar
+    
+ARG USERNAME=user
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} ${USERNAME} \
+	&& useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} -s /bin/bash \
+	&& chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} \
+	&& rm /bin/sh \
+	&& ln -s bash /bin/sh
+
+WORKDIR /home/${USERNAME}
+USER $USERNAME
