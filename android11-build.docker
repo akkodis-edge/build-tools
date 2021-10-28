@@ -30,8 +30,6 @@ RUN apt update && \
     && mkdir -p /opt/gcc-aarch64 \
     && tar -xf /opt/gcc_arm.tar -C /opt/gcc-aarch64/ && rm /opt/gcc_arm.tar
    
-# We allow passing in user name/uid/gid as it allows files created to be owned by the user.
-# Git options are set to avoid repo init to enter interactive mode.
 ARG USERNAME=user
 ARG UID=1000
 ARG GID=1000
@@ -39,10 +37,13 @@ RUN groupadd -g ${GID} ${USERNAME} \
 	&& useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} -s /bin/bash \
 	&& chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} \
 	&& rm /bin/sh \
-	&& ln -s bash /bin/sh \
-	&& git config --global user.name 'Android11 Builder' \
-	&& git config --global user.email 'builder@datarespons.se' \
-	&& git config --global color.ui true
+	&& ln -s bash /bin/sh
 
 WORKDIR /home/${USERNAME}
 USER $USERNAME
+
+# We allow passing in user name/uid/gid as it allows files created to be owned by the user.
+# Git options are set to avoid repo init to enter interactive mode.
+RUN git config --global user.name 'Android11 Builder' \
+	&& git config --global user.email 'builder@datarespons.se' \
+	&& git config --global color.ui true
