@@ -93,7 +93,7 @@ elif [ "$DRS_DEPLOY_METHOD" = "sftp" ]; then
 	if [ "x$DRS_SFTP_URL" = "x" ]; then
 		echo "Missing parameter for method $DRS_DEPLOY_METHOD"
 		echo "Mandatory:"
-		echo "  DRS_SFTP_URL"ls /tm
+		echo "  DRS_SFTP_URL"
 		exit 1
 	fi
 	
