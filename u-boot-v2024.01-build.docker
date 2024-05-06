@@ -1,0 +1,39 @@
+# nxp code signing tool (cst 3.3.2) relies on openssl 1.1 which is not available 
+# in debian starting with 12.0. Stick with newest possible release.
+FROM debian:11.9
+WORKDIR /usr/src
+RUN apt update && \
+	apt install -y \
+		# u-boot build dependencies
+		bc build-essential git libncurses5-dev lzop perl \
+		libssl-dev bison flex git gcc-aarch64-linux-gnu zlib1g-dev \
+		wget python3 python3-cryptography python3-pyelftools \
+		device-tree-compiler python3-pycryptodome python3-cryptography \
+		python3-distutils swig python3-dev python3-setuptools xxd \
+		# cst signing dependencies and other utilities
+		git libengine-pkcs11-openssl gnutls-bin opensc p11-kit xxd
+ARG cst_branch=v3.3.2
+ARG github_hostkey="github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk="
+RUN --mount=type=ssh \
+	# Setup ssh known_hosts
+	mkdir -p -m 0600 ~/.ssh && \
+	echo "${github_hostkey}" >> ~/.ssh/known_hosts && \
+	# Download cst
+	git clone -b ${cst_branch} git@github.com:data-respons-solutions/dr-cst-mirror.git /usr/src/cst-${cst_branch} && \
+	# Setup pkcs11 environment for accessing pkcs11 module over unix socket
+	echo "priority: 10" > /usr/share/p11-kit/modules/remote.module && \
+	echo "module: /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-client.so" >> /usr/share/p11-kit/modules/remote.module && \
+	# Setup cst environment
+	mkdir -p /opt/cst-ssl && \
+	ln -s /usr/lib/x86_64-linux-gnu/ /opt/cst-ssl/lib && \
+	ln -s /usr/lib/ssl/openssl.cnf /opt/cst-ssl/openssl.cnf
+COPY --chown=755 sign-imx.sh /usr/local/bin/
+ARG USERNAME=user
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} ${USERNAME} && \
+	useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} && \
+	chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
+	# Add cst tool to PATH
+	echo "PATH=/usr/src/cst-${cst_branch}/linux64/bin:\${PATH}" >> /home/${USERNAME}/.bashrc
+USER ${USERNAME}
