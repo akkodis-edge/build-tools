@@ -108,11 +108,12 @@ output_path="$(realpath -s ${output})" || die "Failed getting OUT path"
 
 case "$type" in
 	platform)
+		platform_loadaddr="$(printf '0x%08x' ${loadaddr})"
 		platform_ivt_offset="1024"
 		platform_csf_offset="1056" # 0x420
-		platform_ddr_offset="0x2420"
-		platform_ddr_size="$(( ${artifact_size} - ${platform_ddr_offset} ))"
-		platform_ddr_hex="$(printf '0x%08x' ${platform_ddr_size})"
+		platform_payload_offset="$(printf '0x%08x' $(( ${platform_csf_offset} + ${csf_size} )))"
+		platform_payload_size="$(printf '0x%08x' $(( ${artifact_size} - ${platform_payload_offset} )))"
+		platform_payload_addr="$(printf '0x%08x' $(( ${platform_loadaddr} + ${platform_payload_offset} )))"
 		cat > "${build}/csf_platform.txt" << EOF
 [Header]
   Version = 4.5
@@ -138,12 +139,12 @@ case "$type" in
 
 [Authenticate Data]
   Verification index = 2
-  # 0x961000: platform header, 1K (0x400)
-  # 0x961400: IVT 32B (0x20)
-  # 0x961420: CSF 8K (0x2000)
-  # 0x963420: DDR blob
-  Blocks = 0x961000 0x0 0x420 "${build}/${artifact_name}", \\
-           0x963420 0x2420 ${platform_ddr_size} "${build}/${artifact_name}"
+  # ${platform_loadaddr}: platform header (0x400 byte)
+  # $(printf '0x%08x' $((${platform_loadaddr} + ${platform_ivt_offset}))): IVT (0x20 byte)
+  # $(printf '0x%08x' $((${platform_loadaddr} + ${platform_csf_offset}))): CSF (${csf_size} byte)
+  # ${platform_payload_addr}: Payload (${platform_payload_size} byte)
+  Blocks = ${platform_loadaddr} 0x0 0x420 "${build}/${artifact_name}", \\
+           ${platform_payload_addr} ${platform_payload_offset} ${platform_payload_size} "${build}/${artifact_name}"
 EOF
 		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
 		echo "0xd1002041 0x00109600 0x00000000 0x00000000 0x00000000 0x00149600 0x20149600 0x00000000" | xxd -r -p > "${build}/platform_ivt.bin" || die "Failed generating ivt"
