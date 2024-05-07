@@ -24,10 +24,15 @@ print_usage() {
     echo "  -t,--type         Artifact type"
     echo "                      - spl"
     echo "                      - fit"
+    echo "                          Binary size must be 4096 byte aligned"
     echo "                      - platform"
     echo "  --table           Path to SRK_table.bin"
     echo "  --csf             PKCS#11 URL for CSFX key"
     echo "  --img             PKCS#11 URL for IMGX key"
+    echo ""
+    echo "Mandatory for --type [fit|platform]"
+    echo "  --loadaddr        Memory address where artifact is loaded"
+    echo "                    --type spl will retrieve address from IVT"
     echo ""
     echo "Optional arguments:"
     echo "  --debug           Show debug output"
@@ -52,6 +57,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--img)
 		img_pkcs11="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--loadaddr)
+		loadaddr="$2"
 		shift # past argument
 		shift # past value
 		;;
@@ -80,6 +90,13 @@ done
 [ "x$csf_pkcs11" = "x" ] && die "Missing mandatory argument --csf"
 [ "x$srk_table" = "x" ] && die "Missing mandatory argument --table"
 [ "x$img_pkcs11" = "x" ] && die "Missing mandatory argument --img"
+
+
+case "$type" in
+	platform|fit)
+		[ "x$loadaddr" = "x" ] && die "Missing mandatory argument --loadaddr"
+		;;
+esac
 
 TMP_DIR=$(mktemp -d) || die "Failed creating temp dir"
 base="$(dirname $(realpath -s $0))" || die "Failed getting script dir"
@@ -145,6 +162,9 @@ EOF
 		spl_csf_offset="$(xxd -s 24 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL csf offset"
 		spl_bin_offset="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL bin offset"
 		spl_dd_offset="$((${spl_csf_offset} - ${spl_bin_offset} + 0x40))" || die "Failed getting SPL dd offset"
+		spl_loadaddr="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL loadaddr"
+		spl_ivt_addr="$((${spl_loadaddr} - 0x40))"
+		spl_ivt_addr_hex="$(printf '0x%08x' ${spl_ivt_addr})"
 		size="$(( ${artifact_size} - ${csf_size} ))"
 		size_hex="$(printf '0x%08x' ${size})"
 		cat > "${build}/csf_spl.txt" << EOF
@@ -176,7 +196,11 @@ EOF
 
 [Authenticate Data]
   Verification index = 2
-  Blocks = 0x911fc0 0x0 ${size_hex} "${build}/${artifact_name}"
+  # ${spl_ivt_addr_hex}: IVT (0x20 byte)
+  # $(printf '0x%08x' $((${spl_ivt_addr_hex} + 0x20))): Boot data + Padding (0x20 byte)
+  # ${spl_loadaddr}: SPL (${size_hex} byte)
+  # ${spl_csf_offset}: CSF (${csf_size} byte)
+  Blocks = ${spl_ivt_addr_hex} 0x0 ${size_hex} "${build}/${artifact_name}"
 EOF
 		[ "$debug" = 1 ] && echo "CST input file:"
 		[ "$debug" = 1 ] && cat "${build}/csf_spl.txt"
@@ -187,8 +211,16 @@ EOF
 		;;
 	fit)
 		# Fit is loaded to base
-		fit_block_base="0x43600000" # CONFIG_SPL_LOAD_FIT_ADDRESS (0x43600000)
+		fit_block_base="$(printf '0x%08x' ${loadaddr})"
 		fit_block_size="$(printf '0x%x' $(( ${artifact_size} + 0x20 )))" || die "Failed calculating total size"
+		# Make IVT -- big endian fields
+		# IVT -- big endian
+		ivt_ptr_base=$(printf "%08x" ${fit_block_base} | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
+		fit_ivt_addr="$(( ${fit_block_base} + ${fit_block_size} - 0x20 ))"
+		fit_csf_addr="$(( ${fit_block_base} + ${fit_block_size} ))"
+		ivt_block_base="$(printf "%08x" ${fit_ivt_addr} | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")"
+		csf_block_base="$(printf "%08x" ${fit_csf_addr} | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")"
+		echo "0xd1002041 ${ivt_ptr_base} 0x00000000 0x00000000 0x00000000 ${ivt_block_base} ${csf_block_base} 0x00000000" | xxd -r -p > "${build}/fit_ivt.bin" || die "Failed generating ivt"
 		cat > "${build}/csf_fit.txt" << EOF
 [Header]
   Version = 4.5
@@ -214,14 +246,11 @@ EOF
 
 [Authenticate Data]
   Verification index = 2
-  Blocks = 0x43600000 0x0 ${fit_block_size} "${build}/${artifact_name}"
+  # ${fit_block_base}: FIT ($(printf '0x%08x' ${artifact_size}) byte)
+  # $(printf '0x%08x' ${fit_ivt_addr}): IVT (0x20 byte)
+  # $(printf '0x%08x' ${fit_csf_addr}): CSF (${csf_size} byte)
+  Blocks = ${fit_block_base} 0x0 ${fit_block_size} "${build}/${artifact_name}"
 EOF
-		# Make IVT -- big endian fields
-		# IVT -- big endian
-		ivt_ptr_base=$(printf "%08x" ${fit_block_base} | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
-		ivt_block_base=$(printf "%08x" $(( ${fit_block_base} + ${fit_block_size} - 0x20 )) | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
-		csf_block_base=$(printf "%08x" $(( ${fit_block_base} + ${fit_block_size} )) | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
-		echo "0xd1002041 ${ivt_ptr_base} 0x00000000 0x00000000 0x00000000 ${ivt_block_base} ${csf_block_base} 0x00000000" | xxd -r -p > "${build}/fit_ivt.bin" || die "Failed generating ivt"
 		[ "$debug" = 1 ] && echo "IVT binary:"
 		[ "$debug" = 1 ] && xxd -g 4 "${build}/fit_ivt.bin"
 		[ "$debug" = 1 ] && echo "CST input file:"
