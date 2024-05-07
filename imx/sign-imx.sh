@@ -3,6 +3,7 @@
 # Size of CSF
 csf_size="0x2000"
 TMP_DIR="NONE"
+debug=0
 
 cleanup() {
 	if ! [ ${TMP_DIR} = "NONE" ]; then
@@ -27,6 +28,9 @@ print_usage() {
     echo "  --table           Path to SRK_table.bin"
     echo "  --csf             PKCS#11 URL for CSFX key"
     echo "  --img             PKCS#11 URL for IMGX key"
+    echo ""
+    echo "Optional arguments:"
+    echo "  --debug           Show debug output"
 }
 
 while [ $# -gt 0 ]; do
@@ -50,6 +54,10 @@ while [ $# -gt 0 ]; do
 		img_pkcs11="$2"
 		shift # past argument
 		shift # past value
+		;;
+	--debug)
+		debug=1
+		shift # past argument
 		;;
 	-*|--*)
 		print_usage
@@ -122,12 +130,18 @@ case "$type" in
 EOF
 		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
 		echo "0xd1002041 0x00109600 0x00000000 0x00000000 0x00000000 0x00149600 0x20149600 0x00000000" | xxd -r -p > "${build}/platform_ivt.bin" || die "Failed generating ivt"
+		[ "$debug" = 1 ] && echo "IVT binary:"
+		[ "$debug" = 1 ] && xxd -g 4 "${build}/platform_ivt.bin"
+		[ "$debug" = 1 ] && echo "CST input file:"
+		[ "$debug" = 1 ] && cat "${build}/csf_platform.txt"
 		dd if="${build}/platform_ivt.bin" of="${build}/${artifact_name}" bs=1 seek=${platform_ivt_offset} conv=notrunc || die "Failed writing ivt"
 		cst -b pkcs11 -i "${build}/csf_platform.txt" -o "${build}/csf_platform.bin" || die "Failed generating csf"
 		# Write csf to end of image
 		dd conv=notrunc seek="$platform_csf_offset" bs=1 if="${build}/csf_platform.bin" of="${build}/${artifact_name}" || die "Failed writing CSF"
 		;;
 	spl)
+		[ "$debug" = 1 ] && echo "IVT binary:"
+		[ "$debug" = 1 ] && xxd -g 4 -l 32 "$artifact"
 		spl_csf_offset="$(xxd -s 24 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL csf offset"
 		spl_bin_offset="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL bin offset"
 		spl_dd_offset="$((${spl_csf_offset} - ${spl_bin_offset} + 0x40))" || die "Failed getting SPL dd offset"
@@ -164,6 +178,8 @@ EOF
   Verification index = 2
   Blocks = 0x911fc0 0x0 ${size_hex} "${build}/${artifact_name}"
 EOF
+		[ "$debug" = 1 ] && echo "CST input file:"
+		[ "$debug" = 1 ] && cat "${build}/csf_spl.txt"
 		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
 		cst -b pkcs11 -i "${build}/csf_spl.txt" -o "${build}/csf_spl.bin" || die "Failed generating csf"
 		# Write csf to end of image
@@ -206,6 +222,10 @@ EOF
 		ivt_block_base=$(printf "%08x" $(( ${fit_block_base} + ${fit_block_size} - 0x20 )) | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
 		csf_block_base=$(printf "%08x" $(( ${fit_block_base} + ${fit_block_size} )) | sed "s@\(..\)\(..\)\(..\)\(..\)@0x\4\3\2\1@")
 		echo "0xd1002041 ${ivt_ptr_base} 0x00000000 0x00000000 0x00000000 ${ivt_block_base} ${csf_block_base} 0x00000000" | xxd -r -p > "${build}/fit_ivt.bin" || die "Failed generating ivt"
+		[ "$debug" = 1 ] && echo "IVT binary:"
+		[ "$debug" = 1 ] && xxd -g 4 "${build}/fit_ivt.bin"
+		[ "$debug" = 1 ] && echo "CST input file:"
+		[ "$debug" = 1 ] && cat "${build}/csf_fit.txt"
 		# Get artifact -- expect size is 4096 aligned
 		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
 		# Append IVT 
