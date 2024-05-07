@@ -117,7 +117,7 @@ case "$type" in
   # 0x961400: IVT 32B (0x20)
   # 0x961420: CSF 8K (0x2000)
   # 0x963420: DDR blob
-  Blocks = 0x961000 0x0 0x420 "${build}/${artifact_name}", \
+  Blocks = 0x961000 0x0 0x420 "${build}/${artifact_name}", \\
            0x963420 0x2420 ${platform_ddr_size} "${build}/${artifact_name}"
 EOF
 		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
