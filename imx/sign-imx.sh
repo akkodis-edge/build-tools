@@ -24,7 +24,7 @@ print_usage() {
     echo "  -t,--type         Artifact type"
     echo "                      - spl"
     echo "                      - fit"
-    echo "                          Binary size must be 4096 byte aligned"
+    echo "                          Artifact size must be 4096 byte aligned"
     echo "                      - platform"
     echo "  --table           Path to SRK_table.bin"
     echo "  --csf             PKCS#11 URL for CSFX key"
@@ -36,6 +36,10 @@ print_usage() {
     echo ""
     echo "Optional arguments:"
     echo "  --debug           Show debug output"
+    echo ""
+    echo "Notes:"
+    echo "Expects CSF size of ${csf_size} bytes."
+    echo ""
 }
 
 while [ $# -gt 0 ]; do
@@ -160,14 +164,25 @@ EOF
 	spl)
 		[ "$debug" = 1 ] && echo "IVT binary:"
 		[ "$debug" = 1 ] && xxd -g 4 -l 32 "$artifact"
+		[ "$debug" = 1 ] && echo "Boot data binary:"
+		[ "$debug" = 1 ] && xxd -g 4 -s 32 -l 32 "$artifact"
 		spl_csf_offset="$(xxd -s 24 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL csf offset"
 		spl_bin_offset="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL bin offset"
 		spl_dd_offset="$((${spl_csf_offset} - ${spl_bin_offset} + 0x40))" || die "Failed getting SPL dd offset"
 		spl_loadaddr="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL loadaddr"
+		spl_full_size="$(xxd -s 36 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL full size"
+		if [ "$(printf '%d' ${artifact_size})" -ne "$(printf '%d' ${spl_full_size})" ]; then
+			echo "SPL boot data and provided artifact size mismatch."
+			echo "  SPL boot data: ${spl_full_size} byte"
+			echo "  SPL artifact:  $(printf '0x%08x' ${artifact_size}) byte"
+			echo "Likely a u-boot configuration issue. Possibly CSF not included in SPL."
+			die "Error -- aborting here as boot will either fail or HAB verification be incomplete"
+		fi
 		spl_ivt_addr="$((${spl_loadaddr} - 0x40))"
 		spl_ivt_addr_hex="$(printf '0x%08x' ${spl_ivt_addr})"
 		size="$(( ${artifact_size} - ${csf_size} ))"
 		size_hex="$(printf '0x%08x' ${size})"
+		spl_bin_size="$(printf '0x%08x' $(( ${artifact_size} - ${csf_size} - 0x40 )))"
 		cat > "${build}/csf_spl.txt" << EOF
 [Header]
   Version = 4.5
@@ -199,7 +214,7 @@ EOF
   Verification index = 2
   # ${spl_ivt_addr_hex}: IVT (0x20 byte)
   # $(printf '0x%08x' $((${spl_ivt_addr_hex} + 0x20))): Boot data + Padding (0x20 byte)
-  # ${spl_loadaddr}: SPL (${size_hex} byte)
+  # ${spl_loadaddr}: SPL (${spl_bin_size} byte)
   # ${spl_csf_offset}: CSF (${csf_size} byte)
   Blocks = ${spl_ivt_addr_hex} 0x0 ${size_hex} "${build}/${artifact_name}"
 EOF
