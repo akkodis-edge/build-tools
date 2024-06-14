@@ -11,8 +11,9 @@ sstate_dir=""
 downloads_dir=""
 pass_ssh=false
 working_directory=""
+p11_server=false
 bb_env_passthrough_additions=""
-while getopts "h?s:c:d:kw:" opt; do
+while getopts "h?s:c:d:kpw:" opt; do
     case "$opt" in
     h|\?)
         echo "Usage: $(basename $0) [OPTIONS]"
@@ -22,6 +23,7 @@ while getopts "h?s:c:d:kw:" opt; do
         echo " -s      sstate-cache directory to pass into container"
         echo " -d      downloads directory to pass into container"
         echo " -w      container working directory"
+        echo " -p      p11-kit server socket export"
         echo
         exit 0
         ;;
@@ -35,6 +37,7 @@ while getopts "h?s:c:d:kw:" opt; do
         ;;
     w)  working_directory="$(realpath $OPTARG)"
         ;;
+    p)  p11_server=true
     esac
 done
 
@@ -51,6 +54,11 @@ if [ ! -z ${downloads_dir} ]; then
 	export DL_DIR="${downloads_dir}"
 	cmd="$cmd -v $downloads_dir:$downloads_dir -e DL_DIR"
 	bb_env_passthrough_additions="${bb_env_passthrough_additions} DL_DIR"
+fi
+if ${p11_server}; then
+    p11_dir="/run/user/$(id -u)/p11-kit"
+	cmd="$cmd -v $p11_dir:$p11_dir -e P11_KIT_SERVER_PID -e P11_KIT_SERVER_ADDRESS"
+	bb_env_passthrough_additions="${bb_env_passthrough_additions} P11_KIT_SERVER_PID P11_KIT_SERVER_ADDRESS"
 fi
 if [ ! -z "${bb_env_passthrough_additions}" ]; then
 	export BB_ENV_PASSTHROUGH_ADDITIONS="${bb_env_passthrough_additions}"
