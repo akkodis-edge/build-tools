@@ -56,9 +56,12 @@ if [ ! -z ${downloads_dir} ]; then
 	bb_env_passthrough_additions="${bb_env_passthrough_additions} DL_DIR"
 fi
 if ${p11_server}; then
+	# oe-kirkstone-build.docker used p11-kit-client for accessing pkcs11 over unix socket.
+	# The module path is defined by the docker image.
+	export FIT_IMAGE_SIGNING_PKCS11_MODULE="/usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-client.so"
     p11_dir="/run/user/$(id -u)/p11-kit"
-	cmd="$cmd -v $p11_dir:$p11_dir -e P11_KIT_SERVER_PID -e P11_KIT_SERVER_ADDRESS"
-	bb_env_passthrough_additions="${bb_env_passthrough_additions} P11_KIT_SERVER_PID P11_KIT_SERVER_ADDRESS"
+	cmd="$cmd -v $p11_dir:$p11_dir -e P11_KIT_SERVER_ADDRESS -e FIT_IMAGE_SIGNING_PKCS11_MODULE"
+	bb_env_passthrough_additions="${bb_env_passthrough_additions} P11_KIT_SERVER_ADDRESS FIT_IMAGE_SIGNING_PKCS11_MODULE"
 fi
 if [ ! -z "${bb_env_passthrough_additions}" ]; then
 	export BB_ENV_PASSTHROUGH_ADDITIONS="${bb_env_passthrough_additions}"
