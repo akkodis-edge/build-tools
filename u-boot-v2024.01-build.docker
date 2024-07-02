@@ -32,7 +32,7 @@ ARG USERNAME=user
 ARG UID=1000
 ARG GID=1000
 # Add cst tool to PATH
-ENV PATH "/usr/src/cst-${cst_branch}/linux64/bin:${PATH}"
+ENV PATH="/usr/src/cst-${cst_branch}/linux64/bin:${PATH}"
 RUN groupadd -g ${GID} ${USERNAME} && \
 	useradd -u ${UID} -g ${USERNAME} -m -d /home/${USERNAME} ${USERNAME} && \
 	chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
