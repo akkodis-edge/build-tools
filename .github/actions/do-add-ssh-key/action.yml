@@ -1,0 +1,39 @@
+name: 'do-add-ssh-key'
+description: 'Add ssh key'
+inputs:
+  home:
+    description: 'Path to users home dir'
+    required: true
+  ssh-key:
+    description: 'Secret ssh key'
+    required: true
+  ssh-key-name:
+    description: 'Name of secret ssh key'
+    required: true
+  ssh-host-name:
+    description: 'Name of host'
+    required: true
+  ssh-user:
+    description: 'ssh username'
+    required: false
+  ssh-known-hosts:
+    description: 'Content being appended to known hosts'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Add'
+      shell: bash
+      run: |
+        install -m 0700 -d "${{ inputs.home }}/.ssh"
+        echo "${{ inputs.ssh-key }}" > "${{ inputs.home }}/.ssh/${{ inputs.ssh-key-name }}"
+        chmod 0600 "${{ inputs.home }}/.ssh/${{ inputs.ssh-key-name }}"
+        echo "Host ${{ inputs.ssh-host-name }}" >> "${{ inputs.home }}/.ssh/config"
+        echo "  IdentityFile ${{ inputs.home }}/.ssh/${{ inputs.ssh-key-name }}" >> "${{ inputs.home }}/.ssh/config"
+        if [ "${{ inputs.ssh-user }}" != '' ]; then
+          echo "  User ${{ inputs.ssh-user }}" >> "${{ inputs.home }}/.ssh/config" 
+        fi
+        if [ "${{ inputs.ssh-known-hosts }}" != '' ]; then
+          echo "${{ inputs.ssh-known-hosts }}" >> "${{ inputs.home }}/.ssh/known_hosts" 
+        fi

@@ -1,0 +1,65 @@
+name: 'do-oe-build'
+description: 'Build openembedded project'
+inputs:
+  image:
+    description: 'Name of image to build'
+    required: true
+  build:
+    description: 'Path to build directory'
+    required: true
+  script:
+    description: 'Path to setup script'
+    required: true
+  sdk:
+    description: 'Whether to build SDK'
+    default: 'no'
+outputs:
+  image_artifacts:
+    description: 'Built image artifacts'
+    value: ${{ steps.export.outputs.image_artifacts }}
+  sdk_artifacts:
+    description: ' Build sdk artifacts'
+    value: ${{ steps.export.outputs.sdk_artifacts }}
+  
+runs:
+  using: 'composite'
+  steps:
+    - name: 'validate env'
+      shell: bash
+      run: |
+         [ "x${{ env.MACHINE }}" != "x" ] || exit 1
+    - name: 'clean'
+      shell: bash
+      run: |
+        rm -rf "${{ inputs.build }}"
+    - name: build
+      shell: bash
+      run: |
+        source "${{ inputs.script }}"
+        bitbake "${{ inputs.image }}"
+        if [ "${{ inputs.sdk }}" = 'yes' ]; then
+          bitbake "${{ inputs.image }}" -c populate_sdk
+        fi
+    - name: export
+      id: export
+      shell: bash
+      run: |
+        image_artifacts=""
+        for f in ${{ inputs.build }}/tmp-glibc/deploy/images/${{ env.MACHINE }}/${{ inputs.image }}-${{ env.MACHINE }}.rootfs-*; do
+          image_artifacts="$image_artifacts $(realpath $f)"
+        done
+        # Error if no artifacts found
+        [ "x$image_artifacts" != "x" ] || exit 1
+        echo "$image_artifacts"
+        echo "image_artifacts=$image_artifacts" >> $GITHUB_OUTPUT
+
+        sdk_artifacts=""
+        if [ "${{ inputs.sdk }}" = 'yes' ]; then
+          for f in ${{ inputs.build }}/tmp-glibc/deploy/sdk/oecore-*; do
+            sdk_artifacts="$sdk_artifacts $(realpath $f)"
+          done
+          # Error if no artifacts found
+          [ "x$sdk_artifacts" != "x" ] || exit 1
+        fi
+        echo "$sdk_artifacts"
+        echo "sdk_artifacts=$sdk_artifacts" >> $GITHUB_OUTPUT

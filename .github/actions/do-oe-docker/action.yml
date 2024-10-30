@@ -1,0 +1,41 @@
+name: do-oe-docker
+inputs:
+  user:
+    description: Name of runner user
+    required: true
+  uid:
+    description: User if of runner user
+    required: true
+  gid:
+    description: Group id of runner user
+    required: true
+  docker_tag:
+    description: Tag to use for docker image
+    required: true
+  docker_url:
+    description: URL for docker registry
+    required: true
+  dockerfile:
+    description: Path to dockerfile
+    required: true
+outputs:
+  home:
+    description: Path of homedir within docker image
+    value: /home/${{ inputs.user }}
+  docker_image:
+    description: 'Name of docker image for usage in jobs.<job_id>.uses'
+    value: "${{ inputs.docker_url }}/${{ inputs.docker_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: 'Build container'
+      shell: bash
+      run: |
+        docker build -t ${{ inputs.docker_tag }} \
+          --build-arg USERNAME=${{ inputs.user }} \
+          --build-arg UID=${{ inputs.uid }} \
+          --build-arg GID=${{ inputs.gid }} \
+          - < ${{ inputs.dockerfile }}
+        docker tag "${{ inputs.docker_tag }}" "${{ inputs.docker_url }}/${{ inputs.docker_tag }}"
+        docker push "${{ inputs.docker_url }}/${{ inputs.docker_tag }}"

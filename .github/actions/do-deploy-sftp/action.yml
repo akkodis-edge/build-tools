@@ -1,0 +1,29 @@
+name: 'do-deploy-sftp'
+description: 'Deploy artifacts to sftp'
+inputs:
+  url:
+    description: 'URL to sftp server'
+    required: true
+  path:
+    description: 'Path on sftp server'
+    required: true
+  artifacts:
+    description: 'Space separated artifacts to deploy'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: deploy
+      shell: bash
+      run: |
+        batchfile="$(mktemp)"
+        echo "-mkdir ${{ inputs.path }}" >> "$batchfile"
+        for f in ${{ inputs.artifacts }}; do
+          echo "put $f ${{ inputs.path }}" >> "$batchfile"
+        done
+        echo "quit" >> "$batchfile"
+        echo "Deploy:"
+        cat "$batchfile"
+        sftp -b "$batchfile" ${{ inputs.url }}
+        rm "$batchfile"

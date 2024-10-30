@@ -1,0 +1,46 @@
+# Get details about runner and also for enforcing the same runner
+# is used for all jobs in this workflow.
+# Without enforcing the runner, all jobs in this workflow may execute on different runners.
+# This functionality depends on the runners unique name being added as a tag. i.e. runner 
+# with name "bs3-se1" will have tag "bs3-se1".
+
+name: 'do-host-setup'
+description: Export host details
+outputs:
+  build_user:
+    description: Name of runner user
+    value: ${{ steps.export.outputs.build_user }}
+  build_uid:
+    description: User id of runner user
+    value: ${{ steps.export.outputs.build_uid }}
+  build_gid:
+    description: Group id of of runner user
+    value: ${{ steps.export.outputs.build_gid }}
+  allocated_runner:
+    description: Name of runner in github
+    value: ${{ runner.name }}
+  docker_url:
+    description: Local docker registry URL
+    value: 'localhost:5000'
+  gtag:
+    description: Git tag of repository
+    value: ${{ steps.export.outputs.gtag }}
+  dl_dir:
+    description: oe downloads dir
+    value: ${{ steps.export.outputs.dl_dir }}
+  sstate_dir:
+    description: oe sstate dir
+    value: ${{ steps.export.outputs.sstate_dir }}
+
+runs:
+  using: composite
+  steps:
+    - id: 'export'
+      shell: bash
+      run: |
+        echo "build_user=$(id -un)" >> $GITHUB_OUTPUT
+        echo "build_uid=$(id -u)" >> $GITHUB_OUTPUT
+        echo "build_gid=$(id -g)" >> $GITHUB_OUTPUT
+        echo "gtag=$(git describe --always --tags --long --dirty)" >> $GITHUB_OUTPUT
+        echo "dl_dir=$HOME/oe/downloads" >> $GITHUB_OUTPUT
+        echo "sstate_dir=$HOME/oe/sstate-cache" >> $GITHUB_OUTPUT
