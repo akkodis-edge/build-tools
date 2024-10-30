@@ -24,7 +24,7 @@ outputs:
     value: /home/${{ inputs.user }}
   docker_image:
     description: 'Name of docker image for usage in jobs.<job_id>.uses'
-    value: "${{ inputs.docker_url }}/${{ inputs.docker_tag }}
+    value: "${{ inputs.docker_url }}/${{ inputs.docker_tag }}"
 
 runs:
   using: composite
