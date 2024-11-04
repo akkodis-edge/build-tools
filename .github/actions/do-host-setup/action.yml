@@ -6,6 +6,14 @@
 
 name: 'do-host-setup'
 description: Export host details
+inputs:
+  working-directory:
+    description: 'Working directory for build'
+    default: ./
+  gtag-extension:
+    description: 'Optional extension appended to gtag'
+    required: false
+    
 outputs:
   build_user:
     description: Name of runner user
@@ -24,7 +32,7 @@ outputs:
     value: 'localhost:5000'
   gtag:
     description: Git tag of repository
-    value: ${{ steps.export.outputs.gtag }}
+    value: "${{ steps.export.outputs.gtag }}${{ inputs.gtag-extension }}"
   dl_dir:
     description: oe downloads dir
     value: ${{ steps.export.outputs.dl_dir }}
@@ -36,6 +44,7 @@ runs:
   using: composite
   steps:
     - id: 'export'
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: |
         echo "build_user=$(id -un)" >> $GITHUB_OUTPUT
