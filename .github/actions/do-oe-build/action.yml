@@ -1,6 +1,9 @@
 name: 'do-oe-build'
 description: 'Build openembedded project'
 inputs:
+  working-directory:
+    description: 'Working directory for build'
+    default: ./
   image:
     description: 'Name of image to build'
     required: true
@@ -29,10 +32,12 @@ runs:
       run: |
          [ "x${{ env.MACHINE }}" != "x" ] || exit 1
     - name: 'clean'
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: |
         rm -rf "${{ inputs.build }}"
     - name: build
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: |
         source "${{ inputs.script }}"
@@ -41,6 +46,7 @@ runs:
           bitbake "${{ inputs.image }}" -c populate_sdk
         fi
     - name: export
+      working-directory: ${{ inputs.working-directory }}
       id: export
       shell: bash
       run: |
