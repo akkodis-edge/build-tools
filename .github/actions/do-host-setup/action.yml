@@ -13,7 +13,7 @@ inputs:
   gtag-extension:
     description: 'Optional extension appended to gtag'
     required: false
-    
+
 outputs:
   build_user:
     description: Name of runner user
@@ -39,6 +39,12 @@ outputs:
   sstate_dir:
     description: oe sstate dir
     value: ${{ steps.export.outputs.sstate_dir }}
+  p11_kit_address:
+    description: p11-kit server unix socket path
+    value: ${{ steps.export.outputs.p11_kit_address }}
+  p11_kit_runtime:
+    description: p11-kit runtime path where unix socket is located
+    value: ${{ steps.export.outputs.p11_kit_runtime }}
 
 runs:
   using: composite
@@ -53,3 +59,5 @@ runs:
         echo "gtag=$(git describe --always --tags --long --dirty)" >> $GITHUB_OUTPUT
         echo "dl_dir=$HOME/oe/downloads" >> $GITHUB_OUTPUT
         echo "sstate_dir=$HOME/oe/sstate-cache" >> $GITHUB_OUTPUT
+        echo "p11_kit_address=$P11_KIT_SERVER_ADDRESS" >> $GITHUB_OUTPUT
+        echo "p11_kit_runtime=/run/user/$(id -u)/p11-kit" >> $GITHUB_OUTPUT
