@@ -18,18 +18,22 @@ print_usage() {
     echo "Usage: mkimage-pubkey.sh [ARGS] OUT"
     echo "Writes u-boot format public key dtb to OUT"
     echo "Mandatory arguments:"
-    echo "  --object          PKCS#11 uri of signing key"
-    echo "  --hint           Key label (Used as key-name-hint for matching key)"
-    echo ""
-    echo "Expects HSM PIN is available in environment"
-    echo "variable GNUTLS_PIN."
+    echo "  --pkcs11          PKCS#11 uri of signing key. Mutually exclusive with --file."
+    echo "                    Expects HSM PIN available in environment variable GNUTLS_PIN."
+    echo "  --key             Path to key in filesystem. Mutually exclusive with --pkcs11."
+    echo "  --hint            Key label (Used as key-name-hint for matching key)"
     echo ""
 }
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--object)
+	--pkcs11)
 		pkcs11_object="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--key)
+		file_path="$2"
 		shift # past argument
 		shift # past value
 		;;
@@ -51,10 +55,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "x$pkcs11_object" = "x" ] && die "Missing mandatory argument --object"
+[ "x$file_path" = "x" -a "x$pkcs11_object" = "x" ] && die "Missing mandatory argument --key or --pkcs11"
+[ "x$file_path" != "x" -a "x$pkcs11_object" != "x" ] && die "Mutually exclusive --key and --pkcs11 provided"
 [ "x$hint" = "x" ] && die "Missing mandatory argument --hint"
 [ "x$output" = "x" ] && die "Missing mandatory argument OUT"
-
 
 TMP_DIR=$(mktemp -d) || die "Failed creating temp dir"
 
@@ -118,8 +122,22 @@ EOF
 dtc -I dts -o "${TMP_DIR}/empty.dtb" "${TMP_DIR}/empty.dts" || die "Failed generating empty.dtb"
 dd if=/dev/zero of="${TMP_DIR}/kernel.bin" bs=1K count=1 || die "Failed generating kernel.bin"
 dd if=/dev/zero of="${TMP_DIR}/fdt.dtb" bs=1K count=1 || die "Failed generating fdt.dtb"
-MKIMAGE_SIGN_PIN="$GNUTLS_PIN" mkimage -N pkcs11 -f "${TMP_DIR}/minimal.its" -K "${TMP_DIR}/empty.dtb" \
-	 -k "${pkcs11_object#pkcs11:}" -r "${TMP_DIR}/minimal.fit" || die "Failed signing"
+
+mkimage_args=""
+if [ "x$pkcs11_object" != "x" ]; then
+	MKIMAGE_SIGN_PIN="$GNUTLS_PIN" mkimage \
+	-N pkcs11 -f "${TMP_DIR}/minimal.its" -K "${TMP_DIR}/empty.dtb"  \
+	-k "${pkcs11_object#pkcs11:}" -r "${TMP_DIR}/minimal.fit" || die "Failed extracting signature public key"
+elif [ "x$file_path" != "x" ]; then
+	mkdir "${TMP_DIR}/keys" || die "Failed creating keydir"
+	cp "$file_path" "${TMP_DIR}/keys/${hint}.key" || die "Failed copying key"
+	openssl req -batch -new -x509 -key "${TMP_DIR}/keys/${hint}.key" -out "${TMP_DIR}/keys/${hint}.crt" || die "Failed creating certificate"
+	mkimage \
+	-f "${TMP_DIR}/minimal.its" -K "${TMP_DIR}/empty.dtb"  \
+	-k "${TMP_DIR}/keys" -r "${TMP_DIR}/minimal.fit" || die "Failed extracting signature public key"
+else
+	die "No key provided"
+fi
 
 cp -v "${TMP_DIR}/empty.dtb" "$output"
 
