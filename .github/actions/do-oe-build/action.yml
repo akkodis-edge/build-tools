@@ -51,7 +51,7 @@ runs:
       shell: bash
       run: |
         image_artifacts=""
-        for f in ${{ inputs.build }}/tmp-glibc/deploy/images/${{ env.MACHINE }}/${{ inputs.image }}-${{ env.MACHINE }}.rootfs-*; do
+        for f in ${{ inputs.build }}/tmp*/deploy/images/${{ env.MACHINE }}/${{ inputs.image }}-${{ env.MACHINE }}.rootfs-*; do
           image_artifacts="$image_artifacts $(realpath $f)"
         done
         # Error if no artifacts found
@@ -61,7 +61,7 @@ runs:
 
         sdk_artifacts=""
         if [ "${{ inputs.sdk }}" = 'yes' ]; then
-          for f in ${{ inputs.build }}/tmp-glibc/deploy/sdk/oecore-*; do
+          for f in ${{ inputs.build }}/tmp*/deploy/sdk/oecore-*; do
             sdk_artifacts="$sdk_artifacts $(realpath $f)"
           done
           # Error if no artifacts found
