@@ -16,6 +16,9 @@ inputs:
   sdk:
     description: 'Whether to build SDK'
     default: 'no'
+  regular:
+    description: 'Whether to build image'
+    default: 'yes'
 outputs:
   image_artifacts:
     description: 'Built image artifacts'
@@ -41,7 +44,9 @@ runs:
       shell: bash
       run: |
         source "${{ inputs.script }}"
-        bitbake "${{ inputs.image }}"
+        if [ "${{ inputs.regular }}" = 'yes' ]; then
+           bitbake "${{ inputs.image }}"
+        fi
         if [ "${{ inputs.sdk }}" = 'yes' ]; then
           bitbake "${{ inputs.image }}" -c populate_sdk
         fi
@@ -51,11 +56,13 @@ runs:
       shell: bash
       run: |
         image_artifacts=""
-        for f in ${{ inputs.build }}/tmp*/deploy/images/${{ env.MACHINE }}/${{ inputs.image }}-${{ env.MACHINE }}.rootfs-*; do
-          image_artifacts="$image_artifacts $(realpath $f)"
-        done
-        # Error if no artifacts found
-        [ "x$image_artifacts" != "x" ] || exit 1
+        if [ "${{ inputs.regular }}" = 'yes' ]; then
+           for f in ${{ inputs.build }}/tmp*/deploy/images/${{ env.MACHINE }}/${{ inputs.image }}-${{ env.MACHINE }}.rootfs-*; do
+             image_artifacts="$image_artifacts $(realpath $f)"
+           done
+           # Error if no artifacts found
+           [ "x$image_artifacts" != "x" ] || exit 1
+        fi
         echo "$image_artifacts"
         echo "image_artifacts=$image_artifacts" >> $GITHUB_OUTPUT
 
