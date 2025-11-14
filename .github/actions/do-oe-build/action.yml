@@ -19,6 +19,9 @@ inputs:
   regular:
     description: 'Whether to build image'
     default: 'yes'
+  spdx:
+    description: 'Export all spdx files found for regular/sdk'
+    default: 'yes'
 outputs:
   image_artifacts:
     description: 'Built image artifacts'
@@ -62,6 +65,21 @@ runs:
            done
            # Error if no artifacts found
            [ "x$image_artifacts" != "x" ] || exit 1
+           if [ "${{ inputs.spdx }}" = 'yes' ]; then
+              # Add all spdx files to image_artifacts, unless already added
+              for f in ${{ inputs.build }}/tmp*/deploy/images/${{ env.MACHINE }}/*.spdx.*; do
+                path="$(realpath $f)"
+                found="no"
+                for x in $image_artifacts; do
+                   if [ "$x" = "$path" ]; then
+                      found="yes"
+                   fi
+                done
+                if [ "$found" != "yes" ]; then
+                   image_artifacts="$image_artifacts $path"
+                fi
+              done
+           fi
         fi
         echo "$image_artifacts"
         echo "image_artifacts=$image_artifacts" >> $GITHUB_OUTPUT
@@ -73,6 +91,21 @@ runs:
           done
           # Error if no artifacts found
           [ "x$sdk_artifacts" != "x" ] || exit 1
+           if [ "${{ inputs.spdx }}" = 'yes' ]; then
+              # Add all spdx files to sdk_artifacts, unless already added
+              for f in ${{ inputs.build }}/tmp*/deploy/sdk/*.spdx.*; do
+                path="$(realpath $f)"
+                found="no"
+                for x in $sdk_artifacts; do
+                   if [ "$x" = "$path" ]; then
+                      found="yes"
+                   fi
+                done
+                if [ "$found" != "yes" ]; then
+                   sdk_artifacts="$sdk_artifacts $path"
+                fi
+              done
+           fi
         fi
         echo "$sdk_artifacts"
         echo "sdk_artifacts=$sdk_artifacts" >> $GITHUB_OUTPUT
