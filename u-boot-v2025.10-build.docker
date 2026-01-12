@@ -10,7 +10,7 @@ RUN apt update && \
 		swig python3-dev python3-setuptools xxd \
 		# cst signing dependencies and other utilities
 		git libengine-pkcs11-openssl gnutls-bin opensc p11-kit xxd \
-		gnutls-dev gcc-arm-none-eabi imx-code-signing-tool
+		gnutls-dev imx-code-signing-tool
 RUN \
 	# Setup pkcs11 environment for accessing pkcs11 module over unix socket
 	echo "priority: 10" > /usr/share/p11-kit/modules/remote.module && \
