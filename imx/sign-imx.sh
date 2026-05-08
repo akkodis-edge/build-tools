@@ -2,6 +2,16 @@
 
 # Size of CSF
 csf_size="0x2000"
+# HAB version to use
+hab_version="4.5"
+# Offset on boot media. Some examples are:
+# 0x0 for imx8m on SPI boot
+# 0x400 for imx6 on eMMC boot
+media_offset="0x0"
+# Appends instead of patches in csf
+csf_append="0"
+# Features which should be left unlocked after HAB execution
+spl_unlock_features="MID"
 TMP_DIR="NONE"
 debug=0
 
@@ -35,7 +45,12 @@ print_usage() {
     echo "                    --type spl will retrieve address from IVT"
     echo ""
     echo "Optional arguments:"
-    echo "  --debug           Show debug output"
+    echo "  --debug               Show debug output"
+    echo "  --csf-size            Reserved CSF size in bytes (default: "$csf_size")"
+    echo "  --hab-version         HAB version to use (default: "$hab_version")"
+    echo "  --media-offset        Offset on target boot media (default: "$media_offset")"
+    echo "  --csf-append          Append csf instead of patching it in"
+    echo "  --spl-unlock-features Features to leave unlocked after SPL validation (default: "$spl_unlock_features")"
     echo ""
     echo "Notes:"
     echo "Expects CSF size of ${csf_size} bytes."
@@ -72,6 +87,30 @@ while [ $# -gt 0 ]; do
 	--debug)
 		debug=1
 		shift # past argument
+		;;
+	--csf-size)
+		csf_size="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--hab-version)
+		hab_version="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--media-offset)
+		media_offset="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--csf-append)
+		csf_append="1"
+		shift # past argument
+		;;
+	--spl-unlock-features)
+		spl_unlock_features="$2"
+		shift # past argument
+		shift # past value
 		;;
 	-*|--*)
 		print_usage
@@ -122,7 +161,7 @@ case "$type" in
 		platform_csf_addr="$(printf '0x%08x' $(( ${platform_loadaddr} + ${platform_csf_offset} )))"
 		cat > "${build}/csf_platform.txt" << EOF
 [Header]
-  Version = 4.5
+  Version = ${hab_version}
   Hash Algorithm = sha256
   Engine = CAAM
   Engine Configuration = 0
@@ -168,6 +207,7 @@ EOF
 		dd conv=notrunc seek="$platform_csf_offset" bs=1 if="${build}/csf_platform.bin" of="${build}/${artifact_name}" || die "Failed writing CSF"
 		;;
 	spl)
+		# read offsets
 		[ "$debug" = 1 ] && echo "IVT binary:"
 		[ "$debug" = 1 ] && xxd -g 4 -l 32 "$artifact"
 		[ "$debug" = 1 ] && echo "Boot data binary:"
@@ -177,13 +217,22 @@ EOF
 		spl_dd_offset="$((${spl_csf_offset} - ${spl_bin_offset} + 0x40))" || die "Failed getting SPL dd offset"
 		spl_loadaddr="$(xxd -s 4 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL loadaddr"
 		spl_full_size="$(xxd -s 36 -l 4 -e ${artifact} | cut -d ' ' -f 2 | sed 's@^@0x@')" || die "Failed getting SPL full size"
-		if [ "$(printf '%d' ${artifact_size})" -ne "$(printf '%d' ${spl_full_size})" ]; then
+		spl_full_size="$((${spl_full_size} - ${media_offset}))" || die "Failed calculating SPL full size"
+		size_diff="$((${spl_full_size} - ${artifact_size}))" || die "Failed comparing artifact size"
+
+		# Get copy of artifact for modifications
+		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
+
+		# Optionally pad if required and allowed
+		if [ "$size_diff" -ne "0" -a "$csf_append" != "1" ]; then
 			echo "SPL boot data and provided artifact size mismatch."
 			echo "  SPL boot data: ${spl_full_size} byte"
 			echo "  SPL artifact:  $(printf '0x%08x' ${artifact_size}) byte"
 			echo "Likely a u-boot configuration issue. Possibly CSF not included in SPL."
+			echo "If CSF should be appended, see --csf-append."
 			die "Error -- aborting here as boot will either fail or HAB verification be incomplete"
 		fi
+
 		spl_ivt_addr="$((${spl_loadaddr} - 0x40))"
 		spl_ivt_addr_hex="$(printf '0x%08x' ${spl_ivt_addr})"
 		size="$(( ${artifact_size} - ${csf_size} ))"
@@ -191,7 +240,7 @@ EOF
 		spl_bin_size="$(printf '0x%08x' $(( ${artifact_size} - ${csf_size} - 0x40 )))"
 		cat > "${build}/csf_spl.txt" << EOF
 [Header]
-  Version = 4.5
+  Version = ${hab_version}
   Hash Algorithm = sha256
   Engine = CAAM
   Engine Configuration = 0
@@ -209,7 +258,7 @@ EOF
 
 [Unlock]
   Engine = CAAM
-  Features = MID
+  Features = ${spl_unlock_features}
 
 [Install Key]
   Verification index = 0
@@ -226,10 +275,13 @@ EOF
 EOF
 		[ "$debug" = 1 ] && echo "CST input file:"
 		[ "$debug" = 1 ] && cat "${build}/csf_spl.txt"
-		cp -v "$artifact_path" "${build}/${artifact_name}" || die "Failed getting artifact"
 		cst -b pkcs11 -i "${build}/csf_spl.txt" -o "${build}/csf_spl.bin" || die "Failed generating csf"
-		# Write csf to end of image
-		dd conv=notrunc seek="$spl_dd_offset" bs=1 if="${build}/csf_spl.bin" of="${build}/${artifact_name}" || die "Failed writing CSF"
+		# Write csf to image
+		if [ "$csf_append" = "1" ]; then
+			cat "${build}/csf_spl.bin" >> "${build}/${artifact_name}" || die "Failed appending CSF"
+		else
+			dd conv=notrunc seek="$spl_dd_offset" bs=1 if="${build}/csf_spl.bin" of="${build}/${artifact_name}" || die "Failed patching in CSF"
+		fi
 		;;
 	fit)
 		# Fit is loaded to base
@@ -245,7 +297,7 @@ EOF
 		echo "0xd1002041 ${ivt_ptr_base} 0x00000000 0x00000000 0x00000000 ${ivt_block_base} ${csf_block_base} 0x00000000" | xxd -r -p > "${build}/fit_ivt.bin" || die "Failed generating ivt"
 		cat > "${build}/csf_fit.txt" << EOF
 [Header]
-  Version = 4.5
+  Version = ${hab_version}
   Hash Algorithm = sha256
   Engine = CAAM
   Engine Configuration = 0
