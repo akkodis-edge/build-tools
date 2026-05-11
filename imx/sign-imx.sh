@@ -12,6 +12,9 @@ media_offset="0x0"
 csf_append="0"
 # Features which should be left unlocked after HAB execution
 spl_unlock_features="MID"
+# Allow signing starting from addr below ivt
+spl_low_addr=""
+
 TMP_DIR="NONE"
 debug=0
 
@@ -51,6 +54,7 @@ print_usage() {
     echo "  --media-offset        Offset on target boot media (default: "$media_offset")"
     echo "  --csf-append          Append csf instead of patching it in"
     echo "  --spl-unlock-features Features to leave unlocked after SPL validation (default: "$spl_unlock_features")"
+    echo "  --spl-low-addr        Sign starting from address below ivt (default: "$spl_low_addr")"
     echo ""
     echo "Notes:"
     echo "Expects CSF size of ${csf_size} bytes."
@@ -109,6 +113,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--spl-unlock-features)
 		spl_unlock_features="$2"
+		shift # past argument
+		shift # past value
+		;;
+	--spl-low-addr)
+		spl_low_addr="$2"
 		shift # past argument
 		shift # past value
 		;;
@@ -236,8 +245,19 @@ EOF
 		spl_ivt_addr="$((${spl_loadaddr} - 0x40))"
 		spl_ivt_addr_hex="$(printf '0x%08x' ${spl_ivt_addr})"
 		size="$(( ${artifact_size} - ${csf_size} ))"
-		size_hex="$(printf '0x%08x' ${size})"
+
+		# Optionally sign at provided address below ivt
+		if [ "x$spl_low_addr" = "x" ]; then
+			spl_low_addr_hex="$(printf '0x%08x' ${spl_ivt_addr})"
+		else
+			spl_low_addr_hex="$(printf '0x%08x' ${spl_low_addr})"
+			ivt_diff="$(( ${spl_ivt_addr} - ${spl_low_addr} ))"
+			size="$(( ${size} + ${ivt_diff} ))"
+		fi
+
 		spl_bin_size="$(printf '0x%08x' $(( ${artifact_size} - ${csf_size} - 0x40 )))"
+		size_hex="$(printf '0x%08x' ${size})"
+
 		cat > "${build}/csf_spl.txt" << EOF
 [Header]
   Version = ${hab_version}
@@ -271,7 +291,7 @@ EOF
   # $(printf '0x%08x' $((${spl_ivt_addr_hex} + 0x20))): Boot data + Padding (0x20 byte)
   # ${spl_loadaddr}: SPL (${spl_bin_size} byte)
   # ${spl_csf_offset}: CSF (${csf_size} byte)
-  Blocks = ${spl_ivt_addr_hex} 0x0 ${size_hex} "${build}/${artifact_name}"
+  Blocks = ${spl_low_addr_hex} 0x0 ${size_hex} "${build}/${artifact_name}"
 EOF
 		[ "$debug" = 1 ] && echo "CST input file:"
 		[ "$debug" = 1 ] && cat "${build}/csf_spl.txt"
